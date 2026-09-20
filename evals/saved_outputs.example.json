@@ -1,0 +1,25 @@
+[
+  {
+    "caseId": "tarot-relationship-intention",
+    "modelId": "replace-with-real-model-id",
+    "promptVersion": 4,
+    "reading": {
+      "headline": "这段关系仍有互动意愿，但是否认真发展要看接下来的实际表达。",
+      "plainLanguage": "连接感仍在，不过态度还没有完全明确，应以持续行动判断。",
+      "evidence": [
+        {
+          "label": "圣杯二正位",
+          "explanation": "双方仍有靠近和交流的基础。"
+        },
+        {
+          "label": "宝剑二逆位",
+          "explanation": "拖延决定的状态正在暴露，需要把态度说清楚。"
+        }
+      ],
+      "risks": ["不能只凭暧昧互动推断长期承诺。"],
+      "actions": ["提出一个具体问题，确认下一次见面和关系方向。"],
+      "boundary": "塔罗不能读取对方未表达的真实内心。",
+      "closing": "先看行动，再慢慢确认呀 ( ˘͈ ᵕ ˘͈ )"
+    }
+  }
+]
