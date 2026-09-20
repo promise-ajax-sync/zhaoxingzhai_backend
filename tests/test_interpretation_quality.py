@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.schemas.interpretation import StructuredReading
 from app.services.interpretation_eval_dataset import load_quality_cases, policy_from_case
-from app.services.interpretation_quality import evaluate_reading
+from app.services.interpretation_quality import QualityPolicy, evaluate_reading
 
 
 CASES_PATH = Path(__file__).resolve().parents[1] / "evals" / "interpretation_cases.json"
