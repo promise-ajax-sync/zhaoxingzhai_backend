@@ -47,6 +47,37 @@ class CaseResponse(CaseUpsertRequest):
     updated_at: datetime = Field(alias="updatedAt")
 
 
+class CaseSyncItem(ApiModel):
+    id: UUID
+    client_id: str = Field(alias="clientId")
+    version: int
+    deleted: bool
+    updated_at: datetime = Field(alias="updatedAt")
+    name: str | None = None
+    profile: dict[str, Any] | None = None
+
+
+class CaseSyncPage(ApiModel):
+    items: list[CaseSyncItem]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+    has_more: bool = Field(alias="hasMore")
+
+
+class RecordSyncItem(ApiModel):
+    id: UUID
+    client_record_id: str = Field(alias="clientRecordId")
+    version: int
+    deleted: bool
+    updated_at: datetime = Field(alias="updatedAt")
+    record: RecordResponse | None = None
+
+
+class RecordSyncPage(ApiModel):
+    items: list[RecordSyncItem]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+    has_more: bool = Field(alias="hasMore")
+
+
 class AiInterpretationUpsertRequest(ApiModel):
     content: str = Field(min_length=1, max_length=100000)
     source: Literal["remote", "local_fallback"]

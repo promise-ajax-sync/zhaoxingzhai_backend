@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -14,7 +14,11 @@ from app.schemas.records import (
     RecordResponse,
     RecordUpsertRequest,
     CaseResponse,
+    CaseSyncItem,
+    CaseSyncPage,
     CaseUpsertRequest,
+    RecordSyncItem,
+    RecordSyncPage,
 )
 from app.services.interpretation_service import InterpretationService
 from app.services.auth_service import request_user
@@ -25,6 +29,7 @@ from app.services.record_service import (
     owned_case,
     require_sync_version,
 )
+from app.services.sync_cursor import decode_sync_cursor, encode_sync_cursor
 
 router = APIRouter()
 
@@ -99,6 +104,51 @@ async def list_cases(
         )
     ).all()
     return [case_response(case) for case in cases]
+
+
+@router.get("/api/v1/sync/cases", response_model=CaseSyncPage)
+async def sync_cases(
+    request: Request,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+) -> CaseSyncPage:
+    user = await request_user(session, request, get_settings())
+    decoded_cursor = decode_sync_cursor(cursor)
+    statement = select(Case).where(Case.user_id == user.id)
+    if decoded_cursor is not None:
+        updated_at, resource_id = decoded_cursor
+        statement = statement.where(
+            or_(
+                Case.updated_at > updated_at,
+                and_(Case.updated_at == updated_at, Case.id > resource_id),
+            )
+        )
+    rows = (
+        await session.scalars(
+            statement.order_by(Case.updated_at.asc(), Case.id.asc()).limit(limit + 1)
+        )
+    ).all()
+    has_more = len(rows) > limit
+    page_rows = rows[:limit]
+    items = [
+        CaseSyncItem(
+            id=item.id,
+            clientId=item.client_id,
+            version=item.sync_version,
+            deleted=item.is_deleted,
+            updatedAt=item.updated_at,
+            name=None if item.is_deleted else item.name,
+            profile=None if item.is_deleted else item.profile,
+        )
+        for item in page_rows
+    ]
+    next_cursor = (
+        encode_sync_cursor(page_rows[-1].updated_at, page_rows[-1].id)
+        if page_rows
+        else None
+    )
+    return CaseSyncPage(items=items, nextCursor=next_cursor, hasMore=has_more)
 
 
 @router.get("/api/v1/cases/{case_id}", response_model=CaseResponse)
@@ -287,6 +337,64 @@ async def list_records(
         [record.id for record in records],
     )
     return [record_response(record, interpretations.get(record.id)) for record in records]
+
+
+@router.get("/api/v1/sync/records", response_model=RecordSyncPage)
+async def sync_records(
+    request: Request,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+) -> RecordSyncPage:
+    user = await request_user(session, request, get_settings())
+    decoded_cursor = decode_sync_cursor(cursor)
+    statement = select(DivinationRecord).where(DivinationRecord.user_id == user.id)
+    if decoded_cursor is not None:
+        updated_at, resource_id = decoded_cursor
+        statement = statement.where(
+            or_(
+                DivinationRecord.updated_at > updated_at,
+                and_(
+                    DivinationRecord.updated_at == updated_at,
+                    DivinationRecord.id > resource_id,
+                ),
+            )
+        )
+    rows = (
+        await session.scalars(
+            statement.order_by(
+                DivinationRecord.updated_at.asc(),
+                DivinationRecord.id.asc(),
+            ).limit(limit + 1)
+        )
+    ).all()
+    has_more = len(rows) > limit
+    page_rows = rows[:limit]
+    interpretations = await latest_interpretations(
+        session,
+        [item.id for item in page_rows if not item.is_deleted],
+    )
+    items = [
+        RecordSyncItem(
+            id=item.id,
+            clientRecordId=item.client_record_id,
+            version=item.sync_version,
+            deleted=item.is_deleted,
+            updatedAt=item.updated_at,
+            record=(
+                None
+                if item.is_deleted
+                else record_response(item, interpretations.get(item.id))
+            ),
+        )
+        for item in page_rows
+    ]
+    next_cursor = (
+        encode_sync_cursor(page_rows[-1].updated_at, page_rows[-1].id)
+        if page_rows
+        else None
+    )
+    return RecordSyncPage(items=items, nextCursor=next_cursor, hasMore=has_more)
 
 
 @router.get("/api/v1/records/{record_id}", response_model=RecordResponse)
