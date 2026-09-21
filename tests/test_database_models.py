@@ -16,8 +16,16 @@ def test_core_database_metadata_contains_expected_tables_and_relationships() -> 
     email_tokens = Base.metadata.tables["email_tokens"]
 
     assert {column.name for column in records.columns}.issuperset(
-        {"user_id", "case_id", "question", "result_payload", "algorithm_version"}
+        {
+            "user_id",
+            "case_id",
+            "question",
+            "result_payload",
+            "algorithm_version",
+            "sync_version",
+        }
     )
+    assert "sync_version" in Base.metadata.tables["cases"].columns
     assert {column.name for column in interpretations.columns}.issuperset(
         {"record_id", "content", "model_id", "prompt_version", "request_id"}
     )

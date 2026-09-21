@@ -23,6 +23,7 @@ from app.services.record_service import (
     new_ai_interpretation,
     owned_record,
     owned_case,
+    require_sync_version,
 )
 
 router = APIRouter()
@@ -34,6 +35,7 @@ def case_response(case: Case) -> CaseResponse:
         clientId=case.client_id,
         name=case.name,
         profile=case.profile,
+        version=case.sync_version,
         createdAt=case.created_at,
         updatedAt=case.updated_at,
     )
@@ -47,11 +49,20 @@ async def upsert_case(
 ) -> CaseResponse:
     user = await request_user(session, request, get_settings())
     case = await session.scalar(
-        select(Case).where(Case.user_id == user.id, Case.client_id == payload.client_id)
+        select(Case)
+        .where(Case.user_id == user.id, Case.client_id == payload.client_id)
+        .with_for_update()
     )
     if case is None:
-        case = Case(user_id=user.id, client_id=payload.client_id)
+        case = Case(user_id=user.id, client_id=payload.client_id, sync_version=1)
         session.add(case)
+    else:
+        require_sync_version(
+            resource="case",
+            base_version=payload.base_version,
+            current_version=case.sync_version,
+        )
+        case.sync_version += 1
     case.name = payload.name
     case.profile = payload.profile
     case.is_deleted = False
@@ -105,11 +116,18 @@ async def get_case(
 async def delete_case(
     case_id: UUID,
     request: Request,
+    base_version: int | None = Query(default=None, alias="baseVersion", ge=1),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     user = await request_user(session, request, get_settings())
-    case = await owned_case(session, user.id, case_id)
+    case = await owned_case(session, user.id, case_id, for_update=True)
+    require_sync_version(
+        resource="case",
+        base_version=base_version,
+        current_version=case.sync_version,
+    )
     case.is_deleted = True
+    case.sync_version += 1
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -164,6 +182,7 @@ def record_response(
         algorithmVersion=record.algorithm_version,
         schemaVersion=record.schema_version,
         occurredAt=record.occurred_at,
+        version=record.sync_version,
         createdAt=record.created_at,
         updatedAt=record.updated_at,
         aiInterpretation=(
@@ -199,10 +218,12 @@ async def upsert_record(
 ) -> RecordResponse:
     user = await request_user(session, request, get_settings())
     record = await session.scalar(
-        select(DivinationRecord).where(
+        select(DivinationRecord)
+        .where(
             DivinationRecord.user_id == user.id,
             DivinationRecord.client_record_id == payload.client_record_id,
         )
+        .with_for_update()
     )
     if record is None:
         record = DivinationRecord(
@@ -216,8 +237,16 @@ async def upsert_record(
             algorithm_version=payload.algorithm_version,
             schema_version=payload.schema_version,
             occurred_at=payload.occurred_at,
+            sync_version=1,
         )
         session.add(record)
+    else:
+        require_sync_version(
+            resource="record",
+            base_version=payload.base_version,
+            current_version=record.sync_version,
+        )
+        record.sync_version += 1
     apply_record_payload(record, payload)
     snapshot = payload.case_snapshot
     if isinstance(snapshot, dict) and isinstance(snapshot.get("caseId"), str):
@@ -277,11 +306,18 @@ async def get_record(
 async def delete_record(
     record_id: UUID,
     request: Request,
+    base_version: int | None = Query(default=None, alias="baseVersion", ge=1),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     user = await request_user(session, request, get_settings())
-    record = await owned_record(session, user.id, record_id)
+    record = await owned_record(session, user.id, record_id, for_update=True)
+    require_sync_version(
+        resource="record",
+        base_version=base_version,
+        current_version=record.sync_version,
+    )
     record.is_deleted = True
+    record.sync_version += 1
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

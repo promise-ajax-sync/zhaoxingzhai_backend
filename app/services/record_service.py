@@ -2,13 +2,32 @@ import hashlib
 import hmac
 import uuid
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.models import AiInterpretation, Case, DivinationRecord, User
 from app.schemas.records import AiInterpretationUpsertRequest, RecordUpsertRequest
+
+
+def require_sync_version(
+    *,
+    resource: str,
+    base_version: int | None,
+    current_version: int,
+) -> None:
+    """Reject stale writes while keeping pre-version clients compatible."""
+    if base_version is None or base_version == current_version:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "sync_version_conflict",
+            "resource": resource,
+            "currentVersion": current_version,
+        },
+    )
 
 
 def device_hash(device_id: str, secret: str) -> str:
@@ -43,6 +62,7 @@ async def owned_record(
     record_id: uuid.UUID,
     *,
     include_deleted: bool = False,
+    for_update: bool = False,
 ) -> DivinationRecord:
     statement = select(DivinationRecord).where(
         DivinationRecord.id == record_id,
@@ -50,6 +70,8 @@ async def owned_record(
     )
     if not include_deleted:
         statement = statement.where(DivinationRecord.is_deleted.is_(False))
+    if for_update:
+        statement = statement.with_for_update()
     record = await session.scalar(statement)
     if record is None:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -62,10 +84,13 @@ async def owned_case(
     case_id: uuid.UUID,
     *,
     include_deleted: bool = False,
+    for_update: bool = False,
 ) -> Case:
     statement = select(Case).where(Case.id == case_id, Case.user_id == user_id)
     if not include_deleted:
         statement = statement.where(Case.is_deleted.is_(False))
+    if for_update:
+        statement = statement.with_for_update()
     case = await session.scalar(statement)
     if case is None:
         raise HTTPException(status_code=404, detail="角色不存在")

@@ -45,6 +45,7 @@ class Case(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     profile: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sync_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="cases")
     records: Mapped[list["DivinationRecord"]] = relationship(back_populates="case")
@@ -82,6 +83,7 @@ class DivinationRecord(TimestampMixin, Base):
     schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sync_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="records")
     case: Mapped[Case | None] = relationship(back_populates="records")

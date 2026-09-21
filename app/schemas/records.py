@@ -19,10 +19,12 @@ class RecordUpsertRequest(ApiModel):
     algorithm_version: int = Field(alias="algorithmVersion", ge=0)
     schema_version: str = Field(alias="schemaVersion", max_length=64)
     occurred_at: datetime = Field(alias="occurredAt")
+    base_version: int | None = Field(default=None, alias="baseVersion", ge=1)
 
 
 class RecordResponse(RecordUpsertRequest):
     id: UUID
+    version: int
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     ai_interpretation: "AiInterpretationRecordResponse | None" = Field(
@@ -35,10 +37,12 @@ class CaseUpsertRequest(ApiModel):
     client_id: str = Field(alias="clientId", min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=120)
     profile: dict[str, Any]
+    base_version: int | None = Field(default=None, alias="baseVersion", ge=1)
 
 
 class CaseResponse(CaseUpsertRequest):
     id: UUID
+    version: int
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
 
